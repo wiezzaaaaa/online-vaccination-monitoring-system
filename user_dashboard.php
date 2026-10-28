@@ -553,13 +553,23 @@ $name = htmlspecialchars($_SESSION['name'] ?? 'Nanay');
             </a>
             <a class="info-card blue" href="health_article.php?topic=breastfeeding">
                 <span class="tooltip-text">Benepisyo ng 6 na buwang eksklusibong pagpapasuso</span>
-                <div class="card-icon"><img src="image/pic1.jpg" alt="Breastfeeding"></div>
+                <div class="card-icon"><img src="image/breastfeeding_cover.jpg" alt="Pagpapasuso ng sanggol"></div>
                 <div class="card-label blue">EKSKLUSIBONG PAGPAPASUSO</div>
             </a>
             <a class="info-card blue" href="health_article.php?topic=baby-milestones">
                 <span class="tooltip-text">Mga bagong kakayahan ni baby sa bawat buwan</span>
                 <div class="card-icon"><img src="image/pic7.webp" alt="Milestones"></div>
                 <div class="card-label blue">PAGLAKI NG SANGGOL</div>
+            </a>
+            <a class="info-card blue" href="health_article.php?topic=developmental-red-flags">
+                <span class="tooltip-text">Mga palatandaan sa pag-unlad na dapat ipasuri</span>
+                <div class="card-icon"><img src="image/child_development.jpg" alt="Bata habang naglalaro at natututo"></div>
+                <div class="card-label blue">PAG-UNLAD: MGA BABALA</div>
+            </a>
+            <a class="info-card blue" href="health_article.php?topic=child-nutrition">
+                <span class="tooltip-text">Pinggang Pinoy at gabay sa pagkain ng bata</span>
+                <div class="card-icon"><img src="image/child_nutrition.jpg" alt="Masustansyang pagkain"></div>
+                <div class="card-label blue">NUTRISYON NG BATA</div>
             </a>
             <a class="info-card blue" href="health_article.php?topic=baby-safety">
                 <span class="tooltip-text">Mga gabay para sa kaligtasan ni baby sa tahanan</span>
