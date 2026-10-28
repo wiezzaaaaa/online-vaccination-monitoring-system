@@ -4,7 +4,7 @@ include '../db_connect.php';
 
 // Check if logged in and if admin/super admin
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] !== 'Admin' && $_SESSION['role'] !== 'Super Admin')) {
-    header("Location: login.php");
+    header("Location: ../login.php");
     exit();
 }
 

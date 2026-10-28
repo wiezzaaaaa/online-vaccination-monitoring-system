@@ -6,7 +6,7 @@ include '../db_connect.php';
 
 // Siguraduhing naka-login ang user at may session user_id
 if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
+    header("Location: ../login.php");
     exit();
 }
 

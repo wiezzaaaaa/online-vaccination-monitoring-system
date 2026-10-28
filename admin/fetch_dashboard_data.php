@@ -40,16 +40,18 @@ $pw_query = mysqli_query($conn, "SELECT * FROM users WHERE role='Admin' AND stat
 if (mysqli_num_rows($pw_query) > 0) {
     while($row = mysqli_fetch_assoc($pw_query)) {
         $pending_workers_html .= '<tr>';
-        $pending_workers_html .= '<td>' . htmlspecialchars($row['first_name'] . " " . $row['last_name']) . '</td>';
-        $pending_workers_html .= '<td>' . htmlspecialchars($row['email']) . '</td>';
+        $pending_workers_html .= '<td><strong>' . htmlspecialchars(trim($row['first_name'] . " " . $row['last_name'])) . '</strong><br><small>' . htmlspecialchars($row['generated_id'] ?? 'No worker ID') . '</small></td>';
+        $pending_workers_html .= '<td>' . htmlspecialchars($row['email']) . '<br><small>' . htmlspecialchars($row['contact_number'] ?? 'No contact number') . '</small></td>';
+        $pending_workers_html .= '<td>' . (!empty($row['created_at']) ? date('M d, Y', strtotime($row['created_at'])) : 'N/A') . '</td>';
         $pending_workers_html .= '<td>';
-        $pending_workers_html .= '<a href="super_admin_dashboard.php?approve_worker_id=' . $row['id'] . '" class="btn-approve">APPROVE</a> ';
+        $json_worker = htmlspecialchars(json_encode($row), ENT_QUOTES, 'UTF-8');
+        $pending_workers_html .= '<button type="button" class="btn-approve" onclick=\'openWorkerReview(' . $json_worker . ')\'>REVIEW</button> ';
         $pending_workers_html .= '<a href="super_admin_dashboard.php?remove_worker_id=' . $row['id'] . '" class="btn-reject" onclick="return confirm(\'Reject this worker?\')">REJECT</a>';
         $pending_workers_html .= '</td>';
         $pending_workers_html .= '</tr>';
     }
 } else {
-    $pending_workers_html = '<tr><td colspan="3" align="center">No pending worker accounts.</td></tr>';
+    $pending_workers_html = '<tr><td colspan="4" align="center">No pending worker accounts.</td></tr>';
 }
 
 // 2. Pending Newborns
@@ -120,16 +122,19 @@ if (check_table_exists($conn, 'schedules')) {
             $schedDate = $sched['schedule_date'] ?? date('Y-m-d');
             $schedId = $sched['id'] ?? '';
 
+            $schedStatus = $sched['status'] ?? 'Pending';
+            $statusClass = strtolower(str_replace(' ', '-', $schedStatus));
+            
             $upcoming_maternal_html .= '
             <div class="schedule-item maternal-border">
                 <div class="sched-header-row">
                     <span class="sched-date">' . htmlspecialchars($schedDate) . '</span>
-                    <span class="status-badge">Pending</span>
+                    <span class="status-badge ' . $statusClass . '">' . htmlspecialchars($schedStatus) . '</span>
                 </div>
                 <div class="sched-patient-name">' . htmlspecialchars($patientName) . '</div>
                 <div class="sched-type">Type: ' . htmlspecialchars($serviceType) . '</div>
                 
-                <form method="POST" action="../process_verification.php" class="sched-actions">
+                <form method="POST" action="process_verification.php" class="sched-actions">
                     <input type="hidden" name="schedule_id" value="' . $schedId . '">
                     <input type="hidden" name="redirect_to" value="super_admin_dashboard.php">
                     <button type="submit" name="mark_done_maternal" class="btn-mark-done">Mark Done</button>
@@ -157,16 +162,19 @@ if (check_table_exists($conn, 'schedules')) {
             $vaccineType = $sched['vaccine_type'] ?? 'N/A';
             $schedDateFull = ($sched['schedule_date'] ?? date('Y-m-d')) . (!empty($sched['schedule_time']) ? ' (' . $sched['schedule_time'] . ')' : '');
             $schedId = $sched['id'] ?? '';
+            $schedStatus = $sched['status'] ?? 'Pending';
+            $statusClass = strtolower(str_replace(' ', '-', $schedStatus));
 
             $upcoming_infant_html .= '
             <div class="schedule-item infant-border">
                 <div class="sched-header-row">
                     <span class="sched-date">' . htmlspecialchars($schedDateFull) . '</span>
+                    <span class="status-badge ' . $statusClass . '">' . htmlspecialchars($schedStatus) . '</span>
                 </div>
                 <div class="sched-patient-name">' . htmlspecialchars($infantName) . '</div>
                 <div class="sched-type">Vaccine: ' . htmlspecialchars($vaccineType) . '</div>
                 
-                <form method="POST" action="../process_verification.php" class="sched-actions">
+                <form method="POST" action="process_verification.php" class="sched-actions">
                     <input type="hidden" name="schedule_id" value="' . $schedId . '">
                     <input type="hidden" name="redirect_to" value="super_admin_dashboard.php">
                     <button type="submit" name="mark_done_infant" class="btn-mark-done">Mark Done</button>

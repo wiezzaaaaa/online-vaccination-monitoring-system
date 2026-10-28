@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 include 'db_connect.php';
 
@@ -32,6 +32,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_profile'])) {
                    WHERE id='$user_id'";
     
     if ($conn->query($update_sql) === TRUE) {
+        // Also sync contact number to maternal_registration table
+        $conn->query("UPDATE maternal_registration SET contact='$contact' WHERE user_id='$user_id'");
+        
         $message = "<div class='alert success'>Profile updated successfully!</div>";
         // Refresh para makita agad ang bagong data
         $result = $conn->query("SELECT * FROM users WHERE id = '$user_id'");
@@ -279,7 +282,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_profile'])) {
         <button class="hamburger-btn" onclick="toggleSidebar()" title="Toggle Sidebar">
             <i class="fa fa-bars"></i>
         </button>
-        <img src="image/logo.png" alt="Brgy Logo" class="logo-img">
+        <img src="image/logo.jpg?v=<?= time() ?>" alt="Brgy Logo" class="logo-img">
         <span class="page-label">Account Settings & Profile</span>
     </div>
     <?php include 'notif_bell.php'; ?>

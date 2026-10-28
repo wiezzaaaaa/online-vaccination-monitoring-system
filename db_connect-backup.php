@@ -2,7 +2,7 @@
 $host = "localhost";
 $user = "root";
 $pass = "";
-$dbname = "finalcapstone_db";
+$dbname = "finalFINAL_CAPSTONE_db";
 
 $conn = mysqli_connect($host, $user, $pass, $dbname);
 

@@ -1,6 +1,8 @@
-﻿<?php
+<?php
 $current_page = basename($_SERVER['PHP_SELF']);
-$base_url = "";
+$script_directory = basename(dirname($_SERVER['SCRIPT_NAME'] ?? ''));
+$base_url = ($script_directory === 'admin') ? '' : 'admin/';
+$root_url = ($base_url === '') ? '../' : '';
 ?>
 
 <!DOCTYPE html>
@@ -213,7 +215,7 @@ $base_url = "";
     <div class="sidebar-header">
         <button class="close-sidebar-x" onclick="hideSidebar()">&times;</button>
         <div class="sidebar-header-content">
-            <img src="../image/logo.png" alt="Barangay Alawihao Logo" class="sidebar-logo">
+            <img src="<?= $root_url ?>image/logo.jpg?v=<?= time() ?>" alt="Barangay Alawihao Logo" class="sidebar-logo">
             <div>
                 <div class="brand-name">ALAWIHAO <span>CENTER</span></div>
                 <p>Administrative Control</p>
@@ -248,6 +250,7 @@ $base_url = "";
         </div>
 
         <a href="<?php echo $base_url; ?>schedule_management.php" class="nav-link" id="link-schedule">Schedule Management</a>
+        <a href="<?php echo $base_url; ?>sms_management.php" class="nav-link" id="link-sms">SMS Notifications</a>
 
         <span class="nav-label">(others)</span>
         <a href="<?php echo $base_url; ?>activity_logs.php" class="nav-link" id="link-settings">History</a>
@@ -256,7 +259,7 @@ $base_url = "";
     </div>
 
     <div class="sidebar-footer">
-    <a href="../logout.php" class="logout-btn">Log out</a>
+    <a href="<?= $root_url ?>logout.php" class="logout-btn">Log out</a>
     </div>
 </nav>
 

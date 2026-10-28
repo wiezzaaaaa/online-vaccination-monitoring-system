@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 include '../db_connect.php';
 
@@ -11,7 +11,7 @@ if (isset($_SESSION['user_id'])) {
 }
 // 1. SECURITY
 if (!isset($_SESSION['role']) && !isset($_SESSION['user_id'])) {
-    header("Location: login.php");
+    header("Location: ../login.php");
     exit();
 }
 
@@ -40,6 +40,19 @@ if (isset($_POST['action_type']) && isset($_POST['sched_id'])) {
         $new_date = mysqli_real_escape_string($conn, $_POST['new_date']);
         mysqli_query($conn, "UPDATE schedules SET schedule_date='$new_date', status='Rescheduled' WHERE id='$s_id'");
         $message = "Schedule successfully rescheduled!";
+
+        // ── SMS Notification via FMCSMS ──
+        require_once '../send_schedule_sms.php';
+        $sched_res = mysqli_query($conn, "SELECT patient_name, service_type, schedule_time, category FROM schedules WHERE id='$s_id'");
+        if ($sched_res && $sched_row = mysqli_fetch_assoc($sched_res)) {
+            $contact = getPatientContactNumber($conn, $sched_row['patient_name'], $sched_row['category'] ?? null);
+            if (!empty($contact)) {
+                $date_fmt = date('F j, Y', strtotime($new_date));
+                $time_fmt = date('g:i A', strtotime($sched_row['schedule_time']));
+                $sms_msg = "Alawihao HC: Hi {$sched_row['patient_name']}! Na-reschedule ang appointment mo sa {$sched_row['service_type']}. Bagong schedule: {$date_fmt} {$time_fmt}. Salamat!";
+                sendSMS($contact, $sms_msg, $s_id, 'rescheduled');
+            }
+        }
     }
 }
 
@@ -52,6 +65,7 @@ $total_infant = $total_infant_q ? mysqli_fetch_assoc($total_infant_q)['count'] :
 
 $total_patients = $total_maternal + $total_infant;
 
+$pending_workers = mysqli_query($conn, "SELECT * FROM users WHERE role='Admin' AND status='Pending' ORDER BY created_at DESC");
 $infant_pending = mysqli_query($conn, "SELECT * FROM $inf_reg_table WHERE status='Pending'");
 $maternal_pending = mysqli_query($conn, "SELECT *, 
     CONCAT(COALESCE(street,''), ' ', COALESCE(barangay,''), ' ', COALESCE(municipality,'')) AS computed_address,
@@ -471,6 +485,8 @@ if (check_table_exists($conn, 'schedules')) {
         <div class="grid-container">
             
             <div class="left-column">
+                <?php include 'worker_verification.php'; ?>
+
                 <!-- NEWBORN REGISTRATION TABLE -->
                 <div class="card">
                     <div class="card-header-title">Pending Newborn Enrollments</div>
@@ -539,7 +555,7 @@ if (check_table_exists($conn, 'schedules')) {
                                 Type: <?php echo htmlspecialchars($s['appointment_type']); ?>
                             </span>
                             
-                            <form method="POST" action="../process_verification.php" class="sched-actions">
+                            <form method="POST" action="process_verification.php" class="sched-actions">
                                 <input type="hidden" name="schedule_id" value="<?php echo $s['id']; ?>">
                                 <input type="hidden" name="redirect_to" value="admin_dashboard.php">
                                 <button type="submit" name="mark_done_maternal" class="btn-done">Mark Done</button>
@@ -574,7 +590,7 @@ if (check_table_exists($conn, 'schedules')) {
                                 Vaccine: <?php echo htmlspecialchars($s['vaccine_type'] ?? 'General Vaccine'); ?>
                             </span>
                             
-                            <form method="POST" action="../process_verification.php" class="sched-actions">
+                            <form method="POST" action="process_verification.php" class="sched-actions">
                                 <input type="hidden" name="schedule_id" value="<?php echo $s['id']; ?>">
                                 <input type="hidden" name="redirect_to" value="admin_dashboard.php">
                                 <button type="submit" name="mark_done_infant" class="btn-done">Mark Done</button>
@@ -683,7 +699,7 @@ if (check_table_exists($conn, 'schedules')) {
         <div class="modal-content">
             <h2 style="color:var(--dark-sage); margin-top:0; border-bottom:2px solid var(--border-color); padding-bottom:10px; font-size:1.2rem;">Maternal Client Record & Clinical Verification</h2>
             
-            <form method="POST" action="../process_verification.php">
+            <form method="POST" action="process_verification.php">
                 <input type="hidden" name="mother_id" id="modal_mother_id">
                 <input type="hidden" name="redirect_to" value="admin_dashboard.php">
                 
@@ -1105,7 +1121,6 @@ if (check_table_exists($conn, 'schedules')) {
             if (event.target == matModal) matModal.style.display = "none";
         }
 
-    // ── NOTIFICATION FUNCTIONS ──────────────────────────────────────────
 </script>
 <?php $notif_path = '../'; include '../notif_js.php'; ?>
 </body>

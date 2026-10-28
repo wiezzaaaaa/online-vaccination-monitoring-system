@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 $current_page = basename($_SERVER['PHP_SELF']);
 
 // Active states para sa mga dropdown
@@ -12,7 +12,7 @@ $is_rec_active   = in_array($current_page, ['admin_maternal_hr.php', 'admin_chil
     <div class="sidebar-header-new">
         <!-- BRAND CONTAINER (Logo + Text Side-by-Side) -->
         <div class="sidebar-brand-wrapper">
-            <img src="../image/logo.png" alt="Barangay Alawihao Logo" class="sidebar-logo">
+            <img src="../image/logo.jpg?v=<?= time() ?>" alt="Barangay Alawihao Logo" class="sidebar-logo">
             <div class="brand-text-group">
                 <div class="brand-new">ALAWIHAO <span class="highlight-new">CENTER</span></div>
                 <div class="sub-brand-new">ADMINISTRATIVE CONTROL</div>
@@ -47,6 +47,7 @@ $is_rec_active   = in_array($current_page, ['admin_maternal_hr.php', 'admin_chil
 
         <!-- Direct Schedule Management Link -->
         <a href="schedule_management.php" class="nav-item-new <?php echo ($current_page == 'schedule_management.php') ? 'active' : ''; ?>">Schedule Management</a>
+        <a href="sms_management.php" class="nav-item-new <?php echo ($current_page == 'sms_management.php') ? 'active' : ''; ?>">SMS Notifications</a>
         <div class="menu-label-new">Others</div>
         <a href="activity_logs.php" class="nav-item-new <?php echo ($current_page == 'activity_logs.php') ? 'active' : ''; ?>">History</a>
         <a href="admin_settings.php" class="nav-item-new <?php echo ($current_page == 'admin_settings.php') ? 'active' : ''; ?>">Settings</a>

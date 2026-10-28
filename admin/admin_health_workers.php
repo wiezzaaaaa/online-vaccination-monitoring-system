@@ -4,7 +4,28 @@ include '../db_connect.php';
 
 // 1. SECURITY CHECK (Admin & Super Admin lang ang pwedeng pumasok dito)
 if (!isset($_SESSION['role']) || ($_SESSION['role'] !== 'Super Admin' && $_SESSION['role'] !== 'Admin')) {
-    header("Location: login.php");
+    header("Location: ../login.php");
+    exit();
+}
+
+if (isset($_GET['worker_action'], $_GET['worker_id'])) {
+    if ($_SESSION['role'] !== 'Super Admin') {
+        header('Location: admin_health_workers.php?status=unauthorized');
+        exit();
+    }
+
+    $worker_action = $_GET['worker_action'];
+    $worker_id = (int) $_GET['worker_id'];
+    $worker_status = $worker_action === 'approve' ? 'approved' : ($worker_action === 'disapprove' ? 'disapproved' : '');
+
+    if ($worker_status !== '') {
+        $stmt = $conn->prepare('UPDATE health_workers SET status = ? WHERE worker_id = ?');
+        $stmt->bind_param('si', $worker_status, $worker_id);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    header('Location: admin_health_workers.php?status=updated');
     exit();
 }
 
@@ -20,17 +41,17 @@ if (isset($_SESSION['user_id'])) {
 }
 
 // 3. FETCH PERSONNEL DATA (Deduplicated and Fixed Status)
-$query = "SELECT uid, generated_id, first_name, last_name, email, role_type, current_status, address, contact_number 
+$query = "SELECT uid, generated_id, first_name, last_name, email, role_type, current_status, account_status, address, contact_number 
           FROM (
             SELECT id AS uid, generated_id, first_name, last_name, email, 'Admin' as role_type,
                    CASE WHEN last_activity >= NOW() - INTERVAL 2 MINUTE THEN 'Online' ELSE 'Offline' END as current_status,
-                   address, contact_number, last_activity
+                   address, contact_number, status as account_status, last_activity
             FROM users WHERE role IN ('Admin', 'Super Admin') AND status = 'Approved'
             UNION
             SELECT worker_id AS uid, generated_id, first_name, last_name, email, 'Worker' as role_type,
                    CASE WHEN last_activity >= NOW() - INTERVAL 2 MINUTE THEN 'Online' ELSE 'Offline' END as current_status,
-                   address, contact_number, last_activity
-            FROM health_workers WHERE status = 'approved'
+                     address, contact_number, status as account_status, last_activity
+                 FROM health_workers WHERE status IN ('approved', 'pending', 'disapproved')
           ) AS combined_workers 
           GROUP BY email 
           ORDER BY (current_status = 'Online') DESC, last_activity DESC, first_name ASC";
@@ -151,6 +172,9 @@ if (!$result) {
                     <td>
                         <span style="background:#EDF2F7; padding:4px 8px; border-radius:5px; font-size:0.7rem; font-weight:600;">
                         <?php echo strtoupper($row['role_type']); ?></span>
+                        <?php if ($row['role_type'] === 'Worker'): ?>
+                            <br><small style="color: var(--text-muted);">Account: <?php echo htmlspecialchars($row['account_status']); ?></small>
+                        <?php endif; ?>
                     </td>
                     <td>
                         <span class="status-dot <?php echo ($row['current_status'] === 'Online') ? 'online-dot' : 'offline-dot'; ?>"></span>
@@ -171,6 +195,10 @@ if (!$result) {
                         })">View Profile</button>
                         
                         <button class="btn-delete" onclick="confirmDelete('<?php echo $row['uid']; ?>', '<?php echo $row['role_type']; ?>', '<?php echo addslashes($row['first_name']); ?>')">Delete</button>
+                        <?php if ($_SESSION['role'] === 'Super Admin' && $row['role_type'] === 'Worker' && $row['account_status'] === 'pending'): ?>
+                            <a class="btn-view" href="admin_health_workers.php?worker_action=approve&worker_id=<?php echo (int) $row['uid']; ?>">Approve</a>
+                            <a class="btn-delete" href="admin_health_workers.php?worker_action=disapprove&worker_id=<?php echo (int) $row['uid']; ?>" onclick="return confirm('Disapprove this worker?')">Disapprove</a>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endwhile; ?>

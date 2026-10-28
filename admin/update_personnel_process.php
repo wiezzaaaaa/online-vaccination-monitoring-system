@@ -5,8 +5,7 @@ include '../db_connect.php';
 if (isset($_POST['update_submit']) && $_SESSION['role'] === 'Super Admin') {
     $uid = $_POST['uid'];
     $role_type = $_POST['role_type'];
-    
-    // Only Email, Address, and Contact are accepted now
+
     $email = mysqli_real_escape_string($conn, $_POST['email']);
     $addr = mysqli_real_escape_string($conn, $_POST['address']);
     $contact = mysqli_real_escape_string($conn, $_POST['contact']);

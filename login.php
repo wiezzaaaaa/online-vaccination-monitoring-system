@@ -2,7 +2,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-include 'db_connect.php';
+require_once __DIR__ . '/db_connect.php';
 
 if (isset($_POST['login'])) {
     $login_input = trim($_POST['field_user_id']);
@@ -20,7 +20,7 @@ if (isset($_POST['login'])) {
         $db_generated_id = $row['generated_id'];
 
         // Strict validation base sa role:
-        if ($role == 'Super Admin' || $role == 'User') {
+        if ($role == 'Super Admin' || $role == 'User' || empty($db_generated_id)) {
             if ($login_input !== $db_email) {
                 echo "<script>alert('Please use your Email.'); window.location.href='login.php';</script>";
                 exit();
@@ -284,7 +284,7 @@ input:focus {
             <p>Access your health center account</p>
         </div>
 
-        <form method="POST" autocomplete="off">
+        <form method="POST" action="login.php" autocomplete="off">
             <input style="display:none" type="text" name="fake_user_field"/>
             <input style="display:none" type="password" name="fake_pass_field"/>
 

@@ -19,9 +19,10 @@
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
 
         body {
-            background-color: var(--bg);
-            background-image: radial-gradient(circle at 2px 2px, #e2e8f0 1px, transparent 0);
-            background-size: 40px 40px;
+            background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('images/alawihao.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -30,12 +31,13 @@
         }
 
         .card {
-            background: var(--white);
+            background: rgba(240, 243, 240, 0.88);
             width: 100%;
             max-width: 400px;
             padding: 40px;
             border-radius: 24px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.03);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.5);
             text-align: center;
         }
 

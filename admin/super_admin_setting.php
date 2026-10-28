@@ -358,7 +358,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_admin_profile']
         <button class="hamburger-btn" onclick="toggleSidebar()" title="Toggle Sidebar">
             <i class="fa fa-bars"></i>
         </button>
-        <img src="../image/logo.png" alt="Brgy Logo" class="logo-img">
+        <img src="../image/logo.jpg?v=<?= time() ?>" alt="Brgy Logo" class="logo-img">
         <span class="page-label">Administrative Settings</span>
     </div>
     <?php include '../notif_bell.php'; ?>

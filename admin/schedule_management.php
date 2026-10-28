@@ -1,10 +1,10 @@
-﻿<?php
+<?php
 session_start();
 include '../db_connect.php';
 
 // Check if logged in and if admin/super admin
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] !== 'Admin' && $_SESSION['role'] !== 'Super Admin')) {
-    header("Location: login.php");
+    header("Location: ../login.php");
     exit();
 }
 
@@ -15,7 +15,7 @@ function notify_user($conn, $patient_name, $schedule_id, $title, $message, $type
 
     // Try maternal_registration first
     $uid = null;
-    $s = $conn->prepare("SELECT user_id FROM maternal_registration WHERE TRIM(CONCAT(client_fname,' ',client_lname)) = ? LIMIT 1");
+    $s = $conn->prepare("SELECT user_id FROM maternal_registration WHERE LOWER(TRIM(CONCAT(client_fname,' ',client_lname))) = LOWER(TRIM(?)) LIMIT 1");
     $s->bind_param("s", $patient_name);
     $s->execute();
     $r = $s->get_result()->fetch_assoc();
@@ -24,7 +24,7 @@ function notify_user($conn, $patient_name, $schedule_id, $title, $message, $type
 
     // Fall back to children table
     if (!$uid) {
-        $s2 = $conn->prepare("SELECT user_id FROM children WHERE TRIM(child_name) = ? LIMIT 1");
+        $s2 = $conn->prepare("SELECT user_id FROM children WHERE LOWER(TRIM(child_name)) = LOWER(TRIM(?)) LIMIT 1");
         $s2->bind_param("s", $patient_name);
         $s2->execute();
         $r2 = $s2->get_result()->fetch_assoc();
@@ -162,6 +162,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_schedule'])) {
 // Handle Delete Schedule
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_schedule'])) {
     $id = intval($_POST['schedule_id']);
+    $sched = $conn->query("SELECT patient_name, service_type, schedule_date FROM schedules WHERE id = $id")->fetch_assoc();
+
+    if ($sched) {
+        $date_fmt = date('F j, Y', strtotime($sched['schedule_date']));
+        notify_user($conn, $sched['patient_name'], $id,
+            "Schedule Cancelled",
+            "Your {$sched['service_type']} schedule on {$date_fmt} was cancelled by the health center.",
+            'cancelled_schedule'
+        );
+    }
+
     $sql = "DELETE FROM schedules WHERE id = ?";
     if ($stmt = $conn->prepare($sql)) {
         $stmt->bind_param("i", $id);
@@ -201,21 +212,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['handle_reschedule'])) 
         $sql = "UPDATE schedules SET schedule_date=?, schedule_time=?, status='Approved', notes=? WHERE id=?";
         if ($stmt = $conn->prepare($sql)) {
             $stmt->bind_param("sssi", $new_date, $new_time, $updated_notes, $id);
-            $stmt->execute();
-            $stmt->close();
-            $message = "Reschedule request approved successfully!";
+            if ($stmt->execute()) {
+                $message = "Reschedule request approved successfully!";
 
-            // ── Notify user ──
-            $sched = $conn->query("SELECT patient_name, service_type FROM schedules WHERE id = $id")->fetch_assoc();
-            if ($sched) {
-                $date_fmt = date('F j, Y', strtotime($new_date));
-                $time_fmt = date('g:i A', strtotime($new_time));
-                notify_user($conn, $sched['patient_name'], $id,
-                    "Reschedule Request Approved",
-                    "Your reschedule request for {$sched['service_type']} has been approved. New date: {$date_fmt} at {$time_fmt}.",
-                    'updated_schedule'
-                );
+                // Notify the user only after the new schedule is saved.
+                $sched = $conn->query("SELECT patient_name, service_type, category FROM schedules WHERE id = $id")->fetch_assoc();
+                if ($sched) {
+                    $date_fmt = date('F j, Y', strtotime($new_date));
+                    $time_fmt = date('g:i A', strtotime($new_time));
+                    notify_user($conn, $sched['patient_name'], $id,
+                        "Reschedule Request Approved",
+                        "Your reschedule request for {$sched['service_type']} has been approved. New date: {$date_fmt} at {$time_fmt}.",
+                        'updated_schedule'
+                    );
+
+                    // ── SMS Notification via FMCSMS ──
+                    require_once '../send_schedule_sms.php';
+                    $contact = getPatientContactNumber($conn, $sched['patient_name'], $sched['category'] ?? null);
+                    if (!empty($contact)) {
+                        $sms_msg = "Alawihao HC: Hi {$sched['patient_name']}! APPROVED na ang reschedule request mo sa {$sched['service_type']}. Bagong schedule: {$date_fmt} {$time_fmt}. Salamat!";
+                        sendSMS($contact, $sms_msg, $id, 'reschedule_approved');
+                    }
+                }
+            } else {
+                $message = "Reschedule approval could not be saved. Please try again.";
+                error_log("Reschedule approval failed for schedule {$id}: " . $stmt->error);
             }
+            $stmt->close();
         }
     } else {
         $sql = "UPDATE schedules SET status='Pending', notes = CONCAT(COALESCE(notes, ''), ' | Reschedule Rejected') WHERE id=?";
@@ -226,7 +249,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['handle_reschedule'])) 
             $message = "Reschedule request rejected.";
 
             // ── Notify user ──
-            $sched = $conn->query("SELECT patient_name, service_type, schedule_date, schedule_time FROM schedules WHERE id = $id")->fetch_assoc();
+            $sched = $conn->query("SELECT patient_name, service_type, schedule_date, schedule_time, category FROM schedules WHERE id = $id")->fetch_assoc();
             if ($sched) {
                 $date_fmt = date('F j, Y', strtotime($sched['schedule_date']));
                 $time_fmt = date('g:i A', strtotime($sched['schedule_time']));
@@ -235,6 +258,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['handle_reschedule'])) 
                     "Your reschedule request for {$sched['service_type']} was not approved. The original schedule on {$date_fmt} at {$time_fmt} remains.",
                     'updated_schedule'
                 );
+
+                // ── SMS Notification via FMCSMS ──
+                require_once '../send_schedule_sms.php';
+                $contact = getPatientContactNumber($conn, $sched['patient_name'], $sched['category'] ?? null);
+                if (!empty($contact)) {
+                    $sms_msg = "Alawihao HC: Hi {$sched['patient_name']}! HINDI NA-APPROVE ang reschedule para sa {$sched['service_type']}. Mananatili sa {$date_fmt} {$time_fmt}. Salamat!";
+                    sendSMS($contact, $sms_msg, $id, 'reschedule_rejected');
+                }
             }
         }
     }
@@ -518,7 +549,10 @@ $result_maternal_patients = $conn->query("SELECT id, CONCAT(client_fname, ' ', c
         <div class="page-header">
             <h2>Schedule Management</h2>
             <div style="display:flex;align-items:center;gap:12px;">
-                <button class="btn-add" onclick="document.getElementById('addModal').style.display='block'">+ Add New Batch Schedule</button>
+                <a href="sms_management.php" style="background:#5A6B47;color:white;text-decoration:none;padding:8px 15px;border-radius:3px;font-size:0.8rem;font-weight:bold;display:inline-flex;align-items:center;gap:6px;transition:0.2s;">
+                    <i class="fa fa-comment-sms"></i> SMS Reminders
+                </a>
+                <button class="btn-add" style="margin-right:0;" onclick="document.getElementById('addModal').style.display='block'">+ Add New Batch Schedule</button>
                 <?php include '../notif_bell.php'; ?>
             </div>
         </div>

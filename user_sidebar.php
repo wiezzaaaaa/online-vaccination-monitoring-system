@@ -14,7 +14,7 @@ if (isset($conn) && isset($_SESSION['user_id'])) {
         
         <!-- BRAND CONTAINER (Logo + Text Side-by-Side) -->
         <div class="sidebar-brand-wrapper">
-            <img src="image/logo.png" alt="Barangay Alawihao Logo" class="sidebar-logo">
+            <img src="image/logo.jpg?v=<?= time() ?>" alt="Barangay Alawihao Logo" class="sidebar-logo">
             <div class="brand-text-group">
                 <div class="brand-name">ALAWIHAO <span>CENTER</span></div>
                 <p>Patient Access Portal</p>

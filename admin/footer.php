@@ -103,7 +103,7 @@ body.dark-mode .sf-badge {
 
         <div>
             <div class="sf-brand">
-                <img src="<?= (strpos($_SERVER['PHP_SELF'], '/admin/') !== false) ? '../' : '' ?>image/logo.png"
+                <img src="<?= (strpos($_SERVER['PHP_SELF'], '/admin/') !== false) ? '../' : '' ?>image/logo.jpg?v=<?= time() ?>"
                      alt="Alawihao Health Center"
                      onerror="this.style.display='none'">
                 <div class="sf-brand-text">

@@ -5,6 +5,15 @@
     // Determine correct path for theme_toggle relative to current file's location
     $notif_path = $notif_path ?? '';
     ?>
+    <?php if (isset($_SESSION['role']) && in_array($_SESSION['role'], ['Admin', 'Super Admin'])): 
+        $sms_link = ($notif_path === '../') ? 'sms_management.php' : 'admin/sms_management.php';
+    ?>
+    <!-- SMS Topbar Icon -->
+    <a href="<?php echo $sms_link; ?>" class="notif-bell-btn" title="SMS Notifications" style="text-decoration:none;">
+        <i class="fa fa-comment-sms"></i>
+    </a>
+    <?php endif; ?>
+
     <!-- Theme toggle -->
     <button class="theme-toggle-btn" onclick="cycleTheme()" title="Toggle theme" id="themeToggleBtn">
         <span id="themeIcon"></span>

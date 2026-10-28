@@ -15,23 +15,58 @@ if (isset($_GET['delete_id'])) {
     // Siguraduhin na sa kanya lang ang idedelete niya at 'Pending' lang ang pwede idelete
     $del_query = "DELETE FROM children WHERE id = ? AND user_id = ? AND status != 'Approved'";
     $del_stmt = $conn->prepare($del_query);
-    $del_stmt->bind_param("ss", $delete_id, $user_id);
+    $del_stmt->bind_param("ii", $delete_id, $user_id);
     $del_stmt->execute();
-    header("Location: " . $_SERVER['PHP_SELF']);
+    header("Location: " . strtok($_SERVER['REQUEST_URI'], '?'));
     exit();
 }
 
-$query = "SELECT *, 
-          TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) AS age_years, 
-          TIMESTAMPDIFF(MONTH, birth_date, CURDATE()) % 12 AS age_months 
-          FROM children 
-          WHERE user_id = ? 
-          ORDER BY id DESC";
+$query = "SELECT c.*, c.height_cm AS height,
+                 COALESCE(c.vaccine_taken, 'None') AS vaccine_taken,
+                 c.administered_by,
+                 TIMESTAMPDIFF(YEAR, c.birth_date, CURDATE()) AS age_years,
+                 TIMESTAMPDIFF(MONTH, c.birth_date, CURDATE()) % 12 AS age_months
+          FROM children c
+          WHERE c.user_id = ?
+          ORDER BY c.created_at DESC";
 
 $stmt = $conn->prepare($query);
-$stmt->bind_param("s", $user_id);
+$stmt->bind_param("i", $user_id);
 $stmt->execute();
-$my_records = $stmt->get_result();
+$result_children = $stmt->get_result();
+$my_records = [];
+while ($row = $result_children->fetch_assoc()) {
+    $history_arr = [];
+    $hist_stmt = $conn->prepare("SELECT * FROM infant_records WHERE child_id = ? ORDER BY created_at DESC");
+    $hist_stmt->bind_param("i", $row['id']);
+    $hist_stmt->execute();
+    $hist_result = $hist_stmt->get_result();
+
+    while ($hist = $hist_result->fetch_assoc()) {
+        $history_arr[] = [
+            'vaccine_taken' => $hist['vaccine_taken'] ?? ($hist['vaccine_name'] ?? ''),
+            'vaccine_date' => $hist['vaccine_date'] ?? (!empty($hist['created_at']) ? date('Y-m-d', strtotime($hist['created_at'])) : ''),
+            'administered_by' => $hist['administered_by'] ?? 'Health Worker',
+            'remarks' => $hist['remarks'] ?? 'No notes yet',
+            'weight_kg' => $hist['weight'] ?? ($hist['weight_kg'] ?? null),
+            'height' => $hist['height'] ?? ($hist['height_cm'] ?? ($hist['length'] ?? null))
+        ];
+    }
+    $hist_stmt->close();
+
+    $row['history'] = $history_arr;
+    $unique_vaccines = [];
+    foreach ($history_arr as $history) {
+        if (!empty($history['vaccine_taken']) && strtolower($history['vaccine_taken']) !== 'none') {
+            $vaccine_name = strtolower(trim($history['vaccine_taken']));
+            if (!in_array($vaccine_name, $unique_vaccines, true)) {
+                $unique_vaccines[] = $vaccine_name;
+            }
+        }
+    }
+    $row['total_doses'] = count($unique_vaccines);
+    $my_records[] = $row;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -192,24 +227,30 @@ $my_records = $stmt->get_result();
                     <th>FullName</th>
                     <th>Age</th>
                     <th>Gender</th>
+                    <th>Vaccination Status</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
-                <?php if ($my_records->num_rows > 0): ?>
-                    <?php while($row = $my_records->fetch_assoc()): ?>
+                <?php if (count($my_records) > 0): ?>
+                    <?php foreach ($my_records as $row): ?>
                     <tr>
                         <td style="font-weight: bold; color: #444;"><?php echo htmlspecialchars($row['child_name']); ?></td>
                         <td><?php echo "{$row['age_years']}Y, {$row['age_months']}M"; ?></td>
                         <td><?php echo $row['gender']; ?></td>
+                        <td>
+                            <span style="background:#eef3ec; color:var(--primary-green); padding:4px 8px; border-radius:4px; font-size:0.7rem; font-weight:bold;">
+                                <?php echo (int) ($row['total_doses'] ?? 0); ?> dose<?php echo ((int) ($row['total_doses'] ?? 0) === 1) ? '' : 's'; ?>
+                            </span>
+                        </td>
                         <td>
                             <span class="status-badge <?php echo ($row['status'] == 'Approved') ? 'status-approved' : 'status-pending'; ?>">
                                 <?php echo ($row['status'] == 'Approved') ? 'Verified' : 'Pending'; ?>
                             </span>
                         </td>
                         <td class="action-btns">
-                            <button class="btn details-btn" onclick="showDetails(<?php echo htmlspecialchars(json_encode($row)); ?>)">Details</button>
+                            <button class="btn details-btn" onclick='showDetails(<?php echo htmlspecialchars(json_encode($row), ENT_QUOTES, "UTF-8"); ?>)'>History</button>
                             
                             <?php if($row['status'] == 'Approved'): ?>
                                 <a href="print_record.php?id=<?php echo $row['id']; ?>" target="_blank" class="btn print-btn">Print</a>
@@ -218,9 +259,9 @@ $my_records = $stmt->get_result();
                             <?php endif; ?>
                         </td>
                     </tr>
-                    <?php endwhile; ?>
+                    <?php endforeach; ?>
                 <?php else: ?>
-                    <tr><td colspan="5" style="text-align:center; padding: 50px; color: #ccc;">No records found.</td></tr>
+                    <tr><td colspan="6" style="text-align:center; padding: 50px; color: #ccc;">No records found.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -233,6 +274,7 @@ $my_records = $stmt->get_result();
         <h3 id="modalTitle" style="color: var(--primary-green); border-bottom: 1px solid #eee; padding-bottom: 10px;">Record Details</h3>
         <div id="modalBody" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
             </div>
+        <div id="historyBody" style="margin-top:20px;"></div>
     </div>
 </div>
 
@@ -240,6 +282,7 @@ $my_records = $stmt->get_result();
     function showDetails(data) {
         const modal = document.getElementById('detailsModal');
         const body = document.getElementById('modalBody');
+        const historyBody = document.getElementById('historyBody');
         document.getElementById('modalTitle').innerText = data.child_name;
         
         body.innerHTML = `
@@ -249,6 +292,16 @@ $my_records = $stmt->get_result();
             <div><small style="color:#aaa">PLACE OF BIRTH</small><br><b>${data.place_of_birth}</b></div>
             <div style="grid-column: span 2"><small style="color:#aaa">STATUS</small><br><b style="color:var(--primary-green)">${data.status.toUpperCase()}</b></div>
         `;
+
+        const history = data.history || [];
+        historyBody.innerHTML = history.length
+            ? '<h4 style="color:var(--primary-green); border-bottom:1px solid #eee; padding-bottom:8px;">Immunization History</h4>' + history.map(record => `
+                <div style="padding:10px 0; border-bottom:1px solid #f0f0f0;">
+                    <b>${record.vaccine_taken || 'Vaccine record'}</b><br>
+                    <small>${record.vaccine_date || 'No date'} | ${record.administered_by || 'Health Worker'}</small><br>
+                    <small>${record.remarks || 'No notes yet'} | Weight: ${record.weight_kg || '--'} kg | Height: ${record.height || '--'} cm</small>
+                </div>`).join('')
+            : '<p style="color:#888; font-size:0.85rem;">No immunization history available.</p>';
         modal.style.display = "block";
     }
 

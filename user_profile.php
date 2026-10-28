@@ -219,7 +219,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_profile'])) {
         <button class="hamburger-btn" onclick="toggleSidebar()" title="Toggle Sidebar">
             <i class="fa fa-bars"></i>
         </button>
-        <img src="image/logo.png" alt="Brgy Logo" class="logo-img">
+        <img src="image/logo.jpg?v=<?= time() ?>" alt="Brgy Logo" class="logo-img">
         <?php include 'notif_bell.php'; ?>
 </div>
     <span class="page-label">My Profile</span>

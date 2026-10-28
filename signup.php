@@ -2,19 +2,40 @@
 include 'db_connect.php';
 
 if (isset($_POST['signup'])) {
-    $fname = mysqli_real_escape_string($conn, $_POST['first_name']);
-    $lname = mysqli_real_escape_string($conn, $_POST['last_name']);
-    $email = mysqli_real_escape_string($conn, $_POST['email']);
-    $pass  = $_POST['password']; 
+    $fname = trim($_POST['first_name']);
+    $lname = trim($_POST['last_name']);
+    $email = trim($_POST['email']);
+    $pass = $_POST['password'];
+    $confirm_pass = $_POST['password_confirmation'] ?? '';
 
-    $check_email = mysqli_query($conn, "SELECT email FROM users WHERE email = '$email'");
-    if (mysqli_num_rows($check_email) > 0) {
-        echo "<script>alert('Error: Ang email na ito ay gamit na!'); window.history.back();</script>";
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        echo "<script>alert('Invalid email format.'); window.history.back();</script>";
         exit();
     }
 
+    if (strlen($pass) < 8 || !preg_match('/[A-Z]/', $pass) || !preg_match('/[0-9]/', $pass) || !preg_match('/[^A-Za-z0-9]/', $pass)) {
+        echo "<script>alert('Password must be at least 8 characters with an uppercase letter, number, and special character.'); window.history.back();</script>";
+        exit();
+    }
+
+    if ($pass !== $confirm_pass) {
+        echo "<script>alert('Passwords do not match.'); window.history.back();</script>";
+        exit();
+    }
+
+    $check_stmt = $conn->prepare('SELECT email FROM users WHERE email = ? LIMIT 1');
+    $check_stmt->bind_param('s', $email);
+    $check_stmt->execute();
+    if ($check_stmt->get_result()->num_rows > 0) {
+        $check_stmt->close();
+        echo "<script>alert('This email is already in use.'); window.history.back();</script>";
+        exit();
+    }
+    $check_stmt->close();
+
     $res = mysqli_query($conn, "SELECT COUNT(*) as total FROM users");
     $count = mysqli_fetch_assoc($res)['total'];
+    $hashed_pass = password_hash($pass, PASSWORD_DEFAULT);
     
     if ($count == 0) {
         $final_role = 'Super Admin';
@@ -22,20 +43,22 @@ if (isset($_POST['signup'])) {
         $new_id_num = str_pad($count + 1, 4, '0', STR_PAD_LEFT);
         $generated_id = "ALW-$year-$new_id_num";
         $success_message = "Registration Successful! Your System ID is: $generated_id";
-        $id_value = "'$generated_id'";
+        $id_value = $generated_id;
     } else {
         $final_role = 'User';
         $success_message = "Registration Successful! You can now log in using your email.";
-        $id_value = "NULL";
+        $id_value = null;
     }
 
-    $sql = "INSERT INTO users (generated_id, first_name, last_name, email, password, role, status, created_at) 
-            VALUES ($id_value, '$fname', '$lname', '$email', '$pass', '$final_role', 'Approved', NOW())";
+    $stmt = $conn->prepare('INSERT INTO users (generated_id, first_name, last_name, email, password, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, \'Approved\', NOW())');
+    $stmt->bind_param('ssssss', $id_value, $fname, $lname, $email, $hashed_pass, $final_role);
 
-    if (mysqli_query($conn, $sql)) {
+    if ($stmt->execute()) {
+        $stmt->close();
         echo "<script>alert('$success_message'); window.location='login.php';</script>";
     } else {
-        echo "Error: " . mysqli_error($conn);
+        echo "Error: " . $stmt->error;
+        $stmt->close();
     }
 }
 ?>

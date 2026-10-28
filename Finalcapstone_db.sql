@@ -490,7 +490,7 @@ CREATE TABLE `schedules` (
   `service_type` varchar(255) NOT NULL,
   `schedule_date` date NOT NULL,
   `schedule_time` time NOT NULL,
-  `status` enum('Pending','Completed','Cancelled','Reschedule Requested') DEFAULT 'Pending',
+  `status` enum('Pending','Approved','Completed','Cancelled','Reschedule Requested') DEFAULT 'Pending',
   `notes` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

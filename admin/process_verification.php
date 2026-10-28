@@ -1,11 +1,45 @@
-﻿<?php
+<?php
 session_start();
 include '../db_connect.php';
 
 // 1. SECURITY CHECK (Pwede ring i-adjust kung pati regular Admin ay papayagan dito)
 if (!isset($_SESSION['role']) || ($_SESSION['role'] !== 'Super Admin' && $_SESSION['role'] !== 'Admin')) {
-    header("Location: login.php");
+    header("Location: ../login.php");
     exit();
+}
+
+// ── Notification 
+function notify_user($conn, $patient_name, $schedule_id, $title, $message, $type = 'new_schedule') {
+    if (empty(trim($patient_name))) return;
+    
+    // Find user_id from the patient name used by the schedules table.
+    $user_id = null;
+    $stmt = $conn->prepare("SELECT user_id FROM maternal_registration WHERE LOWER(TRIM(CONCAT(client_fname, ' ', client_lname))) = LOWER(TRIM(?)) LIMIT 1");
+    $stmt->bind_param("s", $patient_name);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        $user_id = $result->fetch_assoc()['user_id'];
+    } else {
+        $stmt->close();
+        $stmt = $conn->prepare("SELECT user_id FROM children WHERE LOWER(TRIM(child_name)) = LOWER(TRIM(?)) LIMIT 1");
+        $stmt->bind_param("s", $patient_name);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            $user_id = $result->fetch_assoc()['user_id'];
+        }
+    }
+    $stmt->close();
+    
+    if ($user_id) {
+        $insert_stmt = $conn->prepare("INSERT INTO notifications (user_id, target_role, schedule_id, title, message, type) VALUES (?, 'User', ?, ?, ?, ?)");
+        $insert_stmt->bind_param("iisss", $user_id, $schedule_id, $title, $message, $type);
+        $insert_stmt->execute();
+        $insert_stmt->close();
+    }
 }
 
 // Tukuyin kung saan ibabalik ang user pagkatapos mag-proseso (depende kung sino ang nag-click)
@@ -15,16 +49,26 @@ $redirect_page = isset($_POST['redirect_to']) ? $_POST['redirect_to'] : (isset($
 
 // Worker Account Approval (Super Admin lang dapat)
 if (isset($_GET['approve_worker_id'])) {
+    if ($_SESSION['role'] !== 'Super Admin') {
+        header("Location: $redirect_page?msg=Unauthorized");
+        exit();
+    }
+
     $id = mysqli_real_escape_string($conn, $_GET['approve_worker_id']);
     $user_data = mysqli_query($conn, "SELECT * FROM users WHERE id = '$id' AND role = 'Admin'");
     $worker = mysqli_fetch_assoc($user_data);
 
     if ($worker) {
-        $fname = $worker['first_name']; $lname = $worker['last_name'];
-        $email = $worker['email']; $pass = $worker['password'];
+        $fname = mysqli_real_escape_string($conn, $worker['first_name']);
+        $lname = mysqli_real_escape_string($conn, $worker['last_name']);
+        $email = mysqli_real_escape_string($conn, $worker['email']);
+        $pass = mysqli_real_escape_string($conn, $worker['password']);
+        $generated_id = mysqli_real_escape_string($conn, $worker['generated_id']);
+        $contact = mysqli_real_escape_string($conn, $worker['contact_number'] ?? '');
+        $address = mysqli_real_escape_string($conn, $worker['address'] ?? '');
 
-        $insert_worker = "INSERT INTO health_workers (first_name, last_name, email, password, status, created_at) 
-                         VALUES ('$fname', '$lname', '$email', '$pass', 'Approved', NOW())";
+        $insert_worker = "INSERT INTO health_workers (generated_id, first_name, last_name, contact_number, address, email, password, status, created_at)
+                         VALUES ('$generated_id', '$fname', '$lname', '$contact', '$address', '$email', '$pass', 'approved', NOW())";
         
         if (mysqli_query($conn, $insert_worker)) {
             mysqli_query($conn, "UPDATE users SET status = 'Approved' WHERE id = '$id'");
@@ -169,7 +213,38 @@ if (isset($_POST['mark_done_maternal'])) {
 if (isset($_POST['reschedule_maternal'])) {
     $schedule_id = mysqli_real_escape_string($conn, $_POST['schedule_id']);
     $new_date = mysqli_real_escape_string($conn, $_POST['new_date']);
-    mysqli_query($conn, "UPDATE schedules SET schedule_date = '$new_date', status = 'Rescheduled' WHERE id = '$schedule_id'");
+    
+    // Get schedule details before updating
+    $sched_query = mysqli_query($conn, "SELECT * FROM schedules WHERE id = '$schedule_id'");
+    $sched = mysqli_fetch_assoc($sched_query);
+    
+    mysqli_query($conn, "UPDATE schedules SET schedule_date = '$new_date', status = 'Approved' WHERE id = '$schedule_id'");
+    
+    // Create notification for user
+    if ($sched) {
+        $date_fmt = date('F j, Y', strtotime($new_date));
+        $time_fmt = date('g:i A', strtotime($sched['schedule_time']));
+        notify_user($conn, $sched['patient_name'], $schedule_id,
+            "Schedule Updated",
+            "Your schedule for {$sched['service_type']} has been rescheduled to {$date_fmt} at {$time_fmt}.",
+            'updated_schedule'
+        );
+        
+        // Create notification for admins
+        $admin_stmt = $conn->prepare("INSERT INTO notifications (user_id, target_role, schedule_id, title, message, type) VALUES (0, 'Admin', ?, ?, ?, 'updated_schedule')");
+        $admin_title = "Schedule Rescheduled";
+        $admin_message = "Maternal schedule for {$sched['patient_name']} ({$sched['service_type']}) was rescheduled to {$date_fmt}.";
+        $admin_stmt->bind_param("iss", $schedule_id, $admin_title, $admin_message);
+        $admin_stmt->execute();
+        $admin_stmt->close();
+        
+        // Create notification for super admins  
+        $super_stmt = $conn->prepare("INSERT INTO notifications (user_id, target_role, schedule_id, title, message, type) VALUES (0, 'Super Admin', ?, ?, ?, 'updated_schedule')");
+        $super_stmt->bind_param("iss", $schedule_id, $admin_title, $admin_message);
+        $super_stmt->execute();
+        $super_stmt->close();
+    }
+    
     header("Location: $redirect_page?msg=MaternalRescheduled");
     exit();
 }
@@ -184,8 +259,39 @@ if (isset($_POST['mark_done_infant'])) {
 if (isset($_POST['reschedule_infant'])) {
     $schedule_id = mysqli_real_escape_string($conn, $_POST['schedule_id']);
     $new_date = mysqli_real_escape_string($conn, $_POST['new_date']);
-    mysqli_query($conn, "UPDATE schedules SET schedule_date = '$new_date', status = 'Rescheduled' WHERE id = '$schedule_id'");
-    header("Location: $redirect_page?msg=MaternalRescheduled");
+    
+    // Get schedule details before updating
+    $sched_query = mysqli_query($conn, "SELECT * FROM schedules WHERE id = '$schedule_id'");
+    $sched = mysqli_fetch_assoc($sched_query);
+    
+    mysqli_query($conn, "UPDATE schedules SET schedule_date = '$new_date', status = 'Approved' WHERE id = '$schedule_id'");
+    
+    // Create notification for user
+    if ($sched) {
+        $date_fmt = date('F j, Y', strtotime($new_date));
+        $time_fmt = date('g:i A', strtotime($sched['schedule_time']));
+        notify_user($conn, $sched['patient_name'], $schedule_id,
+            "Schedule Updated", 
+            "Your child's vaccination schedule for {$sched['service_type']} has been rescheduled to {$date_fmt} at {$time_fmt}.",
+            'updated_schedule'
+        );
+        
+        // Create notification for admins
+        $admin_stmt = $conn->prepare("INSERT INTO notifications (user_id, target_role, schedule_id, title, message, type) VALUES (0, 'Admin', ?, ?, ?, 'updated_schedule')");
+        $admin_title = "Schedule Rescheduled";
+        $admin_message = "Child vaccination schedule for {$sched['patient_name']} ({$sched['service_type']}) was rescheduled to {$date_fmt}.";
+        $admin_stmt->bind_param("iss", $schedule_id, $admin_title, $admin_message);
+        $admin_stmt->execute();
+        $admin_stmt->close();
+        
+        // Create notification for super admins
+        $super_stmt = $conn->prepare("INSERT INTO notifications (user_id, target_role, schedule_id, title, message, type) VALUES (0, 'Super Admin', ?, ?, ?, 'updated_schedule')");
+        $super_stmt->bind_param("iss", $schedule_id, $admin_title, $admin_message);
+        $super_stmt->execute();
+        $super_stmt->close();
+    }
+    
+    header("Location: $redirect_page?msg=InfantRescheduled");
     exit();
 }
 

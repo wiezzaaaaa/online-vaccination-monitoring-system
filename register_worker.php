@@ -3,13 +3,18 @@ session_start();
 include('db_connect.php');
 // Security: Check if logged in and is Super Admin
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'Super Admin') {
-    header("Location: admin/super_admin_dashboard.php?msg=Worker+successfully+registered");
+    header("Location: admin/super_admin_dashboard.php?msg=Unauthorized");
     exit(); 
 }
 
 /** * LOGIC PARA SA AUTO-GENERATED ID **/
 $currentYear = date("Y");
-$query = "SELECT generated_id FROM health_workers WHERE generated_id LIKE '$currentYear-%' ORDER BY generated_id DESC LIMIT 1";
+$query = "SELECT generated_id FROM (
+                        SELECT generated_id FROM health_workers WHERE generated_id LIKE '$currentYear-%'
+                        UNION ALL
+                        SELECT generated_id FROM users WHERE generated_id LIKE '$currentYear-%'
+                    ) AS worker_ids
+                    ORDER BY generated_id DESC LIMIT 1";
 $result = mysqli_query($conn, $query);
 
 if (mysqli_num_rows($result) > 0) {
@@ -106,6 +111,12 @@ $newGeneratedID = $currentYear . '-' . $formattedNumber;
     <div class="form-card">
         <h2>Register Worker</h2>
         <p class="subtitle">Create a new account for health center personnel.</p>
+
+        <?php if (isset($_GET['error']) && $_GET['error'] === 'duplicate'): ?>
+            <div style="background:#FFF5F5; color:#C53030; border:1px solid #FEB2B2; padding:10px; border-radius:8px; margin-bottom:15px; font-size:0.85rem;">
+                This email or worker ID is already registered. Use a different email or remove the old account first.
+            </div>
+        <?php endif; ?>
         
         <form action="register_worker_process.php" method="POST" id="registrationForm">
             <div class="id-container">

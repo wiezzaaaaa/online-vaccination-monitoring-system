@@ -3,7 +3,7 @@ session_start();
 include '../db_connect.php';
 
 if (!isset($_SESSION['admin_id']) && !isset($_SESSION['user_id'])) {
-    header("Location: login.php");
+    header("Location: ../login.php");
     exit();
 }
 
@@ -112,7 +112,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_account'])) {
         $del_sql = "DELETE FROM $table_name WHERE $id_column='$admin_id'";
         if ($conn->query($del_sql) === TRUE) {
             session_destroy();
-            header("Location: login.php?deleted=success");
+            header("Location: ../login.php?deleted=success");
             exit();
         } else {
             $message = "<div class='alert error'>Deletion failed: " . $conn->error . "</div>";
@@ -357,7 +357,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_account'])) {
         <button class="hamburger-btn" onclick="toggleSidebar()" title="Toggle Sidebar">
             <i class="fa fa-bars"></i>
         </button>
-        <img src="../image/logo.png" alt="Brgy Logo" class="logo-img">
+        <img src="../image/logo.jpg?v=<?= time() ?>" alt="Brgy Logo" class="logo-img">
         <span class="page-label">Account Settings & Profile</span>
     </div>
     <?php include '../notif_bell.php'; ?>
